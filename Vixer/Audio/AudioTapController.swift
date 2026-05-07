@@ -7,7 +7,7 @@ final class AudioTapController {
         case deviceStream(stream: Int, makeupGain: Float)
     }
 
-    private static let log = Logger(subsystem: "com.armanmohammadi.Vixer", category: "AudioTap")
+    private static let log = Logger(subsystem: "app.vixer.Vixer", category: "AudioTap")
 
     let pid: pid_t
     let bundleID: String

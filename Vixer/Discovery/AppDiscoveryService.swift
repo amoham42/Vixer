@@ -19,7 +19,7 @@ private enum AudioTapTuning {
 @MainActor
 @Observable
 final class AppDiscoveryService {
-    nonisolated private static let log = Logger(subsystem: "com.armanmohammadi.Vixer", category: "Discovery")
+    nonisolated private static let log = Logger(subsystem: "app.vixer.Vixer", category: "Discovery")
 
     private(set) var apps: [AppEntry] = []
     private var observers: [NSObjectProtocol] = []
