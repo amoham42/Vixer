@@ -24,13 +24,20 @@ final class MasterVolumeService {
 
     func setVolume(_ value: Float) {
         var v = max(0.0, min(1.0, value))
-        var address = volumeAddress(channel: preferredChannel())
-        let status = AudioObjectSetPropertyData(
-            currentDeviceID, &address, 0, nil,
-            UInt32(MemoryLayout<Float>.size), &v
-        )
-        if status != noErr {
-            Self.log.error("setVolume failed status=\(status)")
+        let channels: [UInt32]
+        switch volumeRoute() {
+        case .master: channels = [kAudioObjectPropertyElementMain]
+        case .stereo: channels = [1, 2]
+        }
+        for ch in channels {
+            var address = volumeAddress(channel: ch)
+            let status = AudioObjectSetPropertyData(
+                currentDeviceID, &address, 0, nil,
+                UInt32(MemoryLayout<Float>.size), &v
+            )
+            if status != noErr {
+                Self.log.error("setVolume ch=\(ch) failed status=\(status)")
+            }
         }
     }
 
@@ -52,10 +59,11 @@ final class MasterVolumeService {
 
     // MARK: - private
 
-    private func preferredChannel() -> UInt32 {
+    private enum VolumeRoute { case master, stereo }
+
+    private func volumeRoute() -> VolumeRoute {
         var address = volumeAddress(channel: kAudioObjectPropertyElementMain)
-        if AudioObjectHasProperty(currentDeviceID, &address) { return kAudioObjectPropertyElementMain }
-        return 1 // fall back to channel 1 (left)
+        return AudioObjectHasProperty(currentDeviceID, &address) ? .master : .stereo
     }
 
     private func volumeAddress(channel: UInt32) -> AudioObjectPropertyAddress {
@@ -75,7 +83,12 @@ final class MasterVolumeService {
 
     private func readCurrentValues() {
         // volume
-        var address = volumeAddress(channel: preferredChannel())
+        let readChannel: UInt32
+        switch volumeRoute() {
+        case .master: readChannel = kAudioObjectPropertyElementMain
+        case .stereo: readChannel = 1
+        }
+        var address = volumeAddress(channel: readChannel)
         var v: Float = 1.0
         var size = UInt32(MemoryLayout<Float>.size)
         if AudioObjectGetPropertyData(currentDeviceID, &address, 0, nil, &size, &v) == noErr {
@@ -95,10 +108,17 @@ final class MasterVolumeService {
     }
 
     private func addPerDeviceListeners() {
-        addListener(
-            objectID: currentDeviceID,
-            address: volumeAddress(channel: preferredChannel())
-        ) { [weak self] in self?.readCurrentValues() }
+        let volumeChannels: [UInt32]
+        switch volumeRoute() {
+        case .master: volumeChannels = [kAudioObjectPropertyElementMain]
+        case .stereo: volumeChannels = [1, 2]
+        }
+        for ch in volumeChannels {
+            addListener(
+                objectID: currentDeviceID,
+                address: volumeAddress(channel: ch)
+            ) { [weak self] in self?.readCurrentValues() }
+        }
 
         addListener(
             objectID: currentDeviceID,
