@@ -24,16 +24,25 @@ final class MasterVolumeService {
     }
 
     func setVolume(_ value: Float) {
-        var v = UnitInterval.clamp(value)
+        let clamped = UnitInterval.clamp(value)
+        var didSetAnyChannel = false
+
         for ch in volumeChannels {
+            var v = clamped
             var address = volumeAddress(channel: ch)
             let status = AudioObjectSetPropertyData(
                 currentDeviceID, &address, 0, nil,
                 UInt32(MemoryLayout<Float>.size), &v
             )
-            if status != noErr {
+            if status == noErr {
+                didSetAnyChannel = true
+            } else {
                 Self.log.error("setVolume ch=\(ch) failed status=\(status)")
             }
+        }
+
+        if didSetAnyChannel {
+            volume = clamped
         }
     }
 
@@ -44,7 +53,9 @@ final class MasterVolumeService {
             currentDeviceID, &address, 0, nil,
             UInt32(MemoryLayout<UInt32>.size), &m
         )
-        if status != noErr {
+        if status == noErr {
+            muted = value
+        } else {
             Self.log.error("setMuted failed status=\(status)")
         }
     }
