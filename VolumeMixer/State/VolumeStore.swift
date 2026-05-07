@@ -35,6 +35,11 @@ final class VolumeStore {
         }
     }
 
+    deinit {
+        writeTimer?.cancel()
+        write()
+    }
+
     func state(for bundleID: String) -> AppVolumeState {
         states[bundleID] ?? AppVolumeState()
     }
