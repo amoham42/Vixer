@@ -267,7 +267,6 @@ struct MixerView: View {
 
     private func toggleExpansion() {
         _ = expansionState.toggle()
-        onSizeChange(desiredContentSize)
     }
 
     @ViewBuilder
