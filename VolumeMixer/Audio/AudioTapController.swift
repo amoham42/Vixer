@@ -77,30 +77,18 @@ final class AudioTapController {
         ) { [weak self] _, inInputData, _, outOutputData, _ in
             guard let self = self else { return }
             let gain: Float = self.muted ? 0.0 : self.volume
-            let inputBufferList = inInputData.pointee
-            let outputBufferList = outOutputData.pointee
-            let bufferCount = min(inputBufferList.mNumberBuffers, outputBufferList.mNumberBuffers)
-            withUnsafePointer(to: inputBufferList) { inPtr in
-                withUnsafePointer(to: outputBufferList) { outPtr in
-                    let inBuffers = UnsafeBufferPointer(
-                        start: UnsafeRawPointer(inPtr).assumingMemoryBound(to: AudioBufferList.self).pointee.mBuffersAddr,
-                        count: Int(bufferCount)
-                    )
-                    let outBuffers = UnsafeBufferPointer(
-                        start: UnsafeRawPointer(outPtr).assumingMemoryBound(to: AudioBufferList.self).pointee.mBuffersAddr,
-                        count: Int(bufferCount)
-                    )
-                    for i in 0..<Int(bufferCount) {
-                        let input = inBuffers[i]
-                        let output = outBuffers[i]
-                        guard let inData = input.mData, let outData = output.mData else { continue }
-                        let frames = Int(input.mDataByteSize) / MemoryLayout<Float>.size
-                        let inP = inData.assumingMemoryBound(to: Float.self)
-                        let outP = outData.assumingMemoryBound(to: Float.self)
-                        for f in 0..<frames {
-                            outP[f] = inP[f] * gain
-                        }
-                    }
+            let inABL  = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: inInputData))
+            let outABL = UnsafeMutableAudioBufferListPointer(outOutputData)
+            let n = min(inABL.count, outABL.count)
+            for i in 0..<n {
+                let inBuf = inABL[i]
+                let outBuf = outABL[i]
+                guard let inData = inBuf.mData, let outData = outBuf.mData else { continue }
+                let frames = Int(inBuf.mDataByteSize) / MemoryLayout<Float>.size
+                let inP = inData.assumingMemoryBound(to: Float.self)
+                let outP = outData.assumingMemoryBound(to: Float.self)
+                for f in 0..<frames {
+                    outP[f] = inP[f] * gain
                 }
             }
         }
@@ -198,14 +186,3 @@ enum AudioTapError: Error {
     case ioProcCreationFailed(status: OSStatus)
 }
 
-// Helper used by the IOProc to get a typed pointer to AudioBufferList.mBuffers (a "flexible array").
-// The system declares it as a 1-element fixed array; we reinterpret as a pointer to the first element.
-private extension AudioBufferList {
-    var mBuffersAddr: UnsafePointer<AudioBuffer> {
-        withUnsafePointer(to: self) { listPtr in
-            UnsafeRawPointer(listPtr)
-                .advanced(by: MemoryLayout<UInt32>.size)
-                .assumingMemoryBound(to: AudioBuffer.self)
-        }
-    }
-}
