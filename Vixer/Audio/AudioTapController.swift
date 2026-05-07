@@ -18,6 +18,7 @@ final class AudioTapController {
     private var aggregateID: AudioObjectID = kAudioObjectUnknown
     private var ioProcID: AudioDeviceIOProcID?
     private var renderState: AudioTapRenderState?
+    private let controlState = AudioTapControlState()
     private var defaultDeviceListenerInstalled = false
     private var defaultDeviceBlock: AudioObjectPropertyListenerBlock?
     private var defaultDeviceAddress = AudioObjectPropertyAddress.global(kAudioHardwarePropertyDefaultOutputDevice)
@@ -40,8 +41,8 @@ final class AudioTapController {
 
     deinit { teardown() }
 
-    func setVolume(_ value: Float) { renderState?.controlState.setVolume(value) }
-    func setMuted(_ value: Bool) { renderState?.controlState.setMuted(value) }
+    func setVolume(_ value: Float) { controlState.setVolume(value) }
+    func setMuted(_ value: Bool) { controlState.setMuted(value) }
 
     // MARK: - tap creation
 
@@ -88,10 +89,9 @@ final class AudioTapController {
             renderer = nil
         }
         let newRenderState = AudioTapRenderState(
-            bundleID: bundleID,
+            controlState: controlState,
             makeupGain: externalRendererMakeupGain,
-            renderer: renderer,
-            logger: Self.log
+            renderer: renderer
         )
         try newRenderState.startRenderer()
         renderState = newRenderState
@@ -184,7 +184,6 @@ final class AudioTapController {
 
     private func handleDefaultOutputChanged() {
         Self.log.debug("Default output changed; rebuilding aggregate for \(self.bundleID, privacy: .public)")
-        let controlSnapshot = renderState?.controlState.snapshot()
         stopIO()
         AggregateDeviceBuilder.destroy(aggregateID)
         aggregateID = kAudioObjectUnknown
@@ -197,9 +196,6 @@ final class AudioTapController {
         }
         do {
             try createTapAndAggregateForCurrentOutput()
-            if let controlSnapshot {
-                renderState?.controlState.set(volume: controlSnapshot.volume, muted: controlSnapshot.muted)
-            }
         } catch {
             Self.log.error("Rebuild failed: \(String(describing: error), privacy: .public)")
         }

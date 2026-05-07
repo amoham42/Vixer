@@ -39,6 +39,31 @@ struct AudioTapControlStateTests {
         #expect(snapshot.muted == true)
     }
 
+    @Test func renderStatesUseInjectedControlState() {
+        let state = AudioTapControlState()
+        state.set(volume: 0.35, muted: true)
+
+        let firstRenderState = AudioTapRenderState(
+            controlState: state,
+            makeupGain: 1,
+            renderer: nil
+        )
+        let secondRenderState = AudioTapRenderState(
+            controlState: state,
+            makeupGain: 1,
+            renderer: nil
+        )
+
+        firstRenderState.controlState.set(volume: 0.7, muted: false)
+
+        let firstSnapshot = firstRenderState.controlState.snapshot()
+        let secondSnapshot = secondRenderState.controlState.snapshot()
+        #expect(firstSnapshot.volume == 0.7)
+        #expect(firstSnapshot.muted == false)
+        #expect(secondSnapshot.volume == 0.7)
+        #expect(secondSnapshot.muted == false)
+    }
+
     @Test
     func concurrentUpdatesKeepSnapshotsValid() async {
         let state = AudioTapControlState()
