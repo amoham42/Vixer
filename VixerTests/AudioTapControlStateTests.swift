@@ -38,4 +38,21 @@ struct AudioTapControlStateTests {
         #expect(snapshot.volume == 0.25)
         #expect(snapshot.muted == true)
     }
+
+    @Test
+    func concurrentUpdatesKeepSnapshotsValid() async {
+        let state = AudioTapControlState()
+
+        await withTaskGroup(of: Void.self) { group in
+            for index in 0..<1_000 {
+                group.addTask {
+                    state.setVolume(Float(index % 150) / 100)
+                    state.setMuted(index.isMultiple(of: 2))
+                    let snapshot = state.snapshot()
+                    #expect(snapshot.volume >= 0)
+                    #expect(snapshot.volume <= 1)
+                }
+            }
+        }
+    }
 }
