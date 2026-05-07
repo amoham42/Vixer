@@ -198,11 +198,7 @@ final class MasterVolumeService {
         )
         var uid: CFString?
         var size = UInt32(MemoryLayout<CFString?>.size)
-        let status = withUnsafeMutablePointer(to: &uid) { ptr -> OSStatus in
-            ptr.withMemoryRebound(to: UInt8.self, capacity: Int(size)) { raw in
-                AudioObjectGetPropertyData(id, &address, 0, nil, &size, raw)
-            }
-        }
+        let status = AudioObjectGetPropertyData(id, &address, 0, nil, &size, &uid)
         return status == noErr ? uid as String? : nil
     }
 }
