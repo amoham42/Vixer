@@ -113,10 +113,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func installOutsideClickMonitor() {
         if outsideClickMonitor != nil { return }
-        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            let mouseLocation = NSEvent.mouseLocation
             Task { @MainActor in
                 guard let self, let panel = self.statusPanel, panel.isVisible else { return }
-                if !panel.frame.contains(event.locationInWindow) {
+                if !panel.frame.contains(mouseLocation) {
                     self.closeStatusPanel()
                 }
             }

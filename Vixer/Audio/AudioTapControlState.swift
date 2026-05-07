@@ -5,6 +5,8 @@ struct AudioTapControlSnapshot: Sendable, Equatable {
     let muted: Bool
 }
 
+/// Thread-safe control state shared between UI/control code and CoreAudio's IOProc.
+/// Safe to mark Sendable because all mutable state is protected by `OSAllocatedUnfairLock`.
 final class AudioTapControlState: @unchecked Sendable {
     private let lock = OSAllocatedUnfairLock(initialState: AudioTapControlSnapshot(volume: 1.0, muted: false))
 

@@ -17,41 +17,16 @@ final class AudioTapController {
     private var tapUID: String = ""
     private var aggregateID: AudioObjectID = kAudioObjectUnknown
     private var ioProcID: AudioDeviceIOProcID?
-    private var externalRenderer: TapOutputRenderer?
+    private var renderState: AudioTapRenderState?
+    private let controlState = AudioTapControlState()
     private var defaultDeviceListenerInstalled = false
     private var defaultDeviceBlock: AudioObjectPropertyListenerBlock?
     private var defaultDeviceAddress = AudioObjectPropertyAddress.global(kAudioHardwarePropertyDefaultOutputDevice)
-
-    private let controlState = AudioTapControlState()
-    private var ioProcLogged = false
-    private var peakProbeRemaining = 100
 
     private var externalRendererMakeupGain: Float {
         switch tapMode {
         case .deviceStream(_, let makeupGain):
             return makeupGain
-        }
-    }
-
-    /// Logged once per controller (from inside the realtime IOProc) so we can confirm the
-    /// IOProc is actually being called. Subsequent calls are no-ops to keep the audio thread cheap.
-    fileprivate func noteIOProcOnce(inputBuffers: Int, outputBuffers: Int) {
-        if ioProcLogged { return }
-        ioProcLogged = true
-        let bid = bundleID
-        DispatchQueue.global(qos: .utility).async {
-            Self.log.info("IOProc fired bundleID=\(bid, privacy: .public) inBufs=\(inputBuffers, privacy: .public) outBufs=\(outputBuffers, privacy: .public)")
-        }
-    }
-
-    fileprivate func noteInputPeakIfNeeded(_ peak: Float, gain: Float) {
-        guard peakProbeRemaining > 0 else { return }
-        peakProbeRemaining -= 1
-        guard peak > 0.0001 || peakProbeRemaining == 0 else { return }
-        peakProbeRemaining = 0
-        let bid = bundleID
-        DispatchQueue.global(qos: .utility).async {
-            Self.log.info("Tap input peak bundleID=\(bid, privacy: .public) peak=\(peak, privacy: .public) gain=\(gain, privacy: .public)")
         }
     }
 
@@ -104,13 +79,22 @@ final class AudioTapController {
         let fmtStatus = AudioObjectGetPropertyData(newTapID, &fmtAddr, 0, nil, &asbdSize, &asbd)
         Self.log.info("Tap format for \(self.bundleID, privacy: .public): status=\(fmtStatus, privacy: .public) sr=\(asbd.mSampleRate, privacy: .public) ch=\(asbd.mChannelsPerFrame, privacy: .public) bits=\(asbd.mBitsPerChannel, privacy: .public) flags=\(asbd.mFormatFlags, privacy: .public)")
 
+        let renderer: TapOutputRenderer?
         if fmtStatus == noErr {
-            externalRenderer = try TapOutputRenderer(
+            renderer = try TapOutputRenderer(
                 sampleRate: asbd.mSampleRate,
                 channelCount: asbd.mChannelsPerFrame
             )
-            try externalRenderer?.start()
+        } else {
+            renderer = nil
         }
+        let newRenderState = AudioTapRenderState(
+            controlState: controlState,
+            makeupGain: externalRendererMakeupGain,
+            renderer: renderer
+        )
+        try newRenderState.startRenderer()
+        renderState = newRenderState
     }
 
     // MARK: - aggregate + IOProc
@@ -138,48 +122,15 @@ final class AudioTapController {
 
     private func installIOProc() throws {
         var procID: AudioDeviceIOProcID?
+        let renderState = renderState
         // nil queue = run on CoreAudio's realtime audio thread. Passing main here would
         // dispatch the block to the UI runloop, which never fires at audio rate.
         let status = AudioDeviceCreateIOProcIDWithBlock(
             &procID,
             aggregateID,
             nil
-        ) { [weak self] _, inInputData, _, outOutputData, _ in
-            guard let self = self else { return }
-            let control = self.controlState.snapshot()
-            let gain: Float = control.muted ? 0.0 : control.volume
-            let inABL  = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: inInputData))
-            let outABL = UnsafeMutableAudioBufferListPointer(outOutputData)
-            let n = min(inABL.count, outABL.count)
-            self.noteIOProcOnce(inputBuffers: inABL.count, outputBuffers: outABL.count)
-            for i in 0..<n {
-                let inBuf = inABL[i]
-                let outBuf = outABL[i]
-                guard let inData = inBuf.mData, let outData = outBuf.mData else { continue }
-                let frames = Int(inBuf.mDataByteSize) / MemoryLayout<Float>.size
-                let inP = inData.assumingMemoryBound(to: Float.self)
-                let outP = outData.assumingMemoryBound(to: Float.self)
-                var peak: Float = 0
-                for f in 0..<frames {
-                    let sample = inP[f]
-                    if self.peakProbeRemaining > 0 {
-                        peak = max(peak, abs(sample))
-                    }
-                    outP[f] = AudioSampleProcessor.externalRendererSample(
-                        input: sample,
-                        volume: control.volume,
-                        muted: control.muted,
-                        makeupGain: self.externalRendererMakeupGain
-                    )
-                }
-                self.externalRenderer?.writeInterleaved(outP, sampleCount: frames)
-                for f in 0..<frames {
-                    outP[f] = 0
-                }
-                if self.peakProbeRemaining > 0 {
-                    self.noteInputPeakIfNeeded(peak, gain: gain)
-                }
-            }
+        ) { _, inInputData, _, outOutputData, _ in
+            renderState?.render(inputBuffers: inInputData, outputBuffers: outOutputData)
         }
         guard status == noErr, procID != nil else {
             throw AudioTapError.ioProcCreationFailed(status: status)
@@ -236,15 +187,13 @@ final class AudioTapController {
         stopIO()
         AggregateDeviceBuilder.destroy(aggregateID)
         aggregateID = kAudioObjectUnknown
-        externalRenderer?.stop()
-        externalRenderer = nil
+        renderState?.stopRenderer()
+        renderState = nil
         if tapID != kAudioObjectUnknown {
             AudioHardwareDestroyProcessTap(tapID)
             tapID = kAudioObjectUnknown
             tapUID = ""
         }
-        ioProcLogged = false
-        peakProbeRemaining = 100
         do {
             try createTapAndAggregateForCurrentOutput()
         } catch {
@@ -262,8 +211,8 @@ final class AudioTapController {
             defaultDeviceBlock = nil
         }
         stopIO()
-        externalRenderer?.stop()
-        externalRenderer = nil
+        renderState?.stopRenderer()
+        renderState = nil
         AggregateDeviceBuilder.destroy(aggregateID)
         aggregateID = kAudioObjectUnknown
         if tapID != kAudioObjectUnknown {

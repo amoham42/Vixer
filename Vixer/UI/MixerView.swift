@@ -132,6 +132,9 @@ struct MixerView: View {
         .onChange(of: presentationState.resetToken) {
             expansionState.reset()
         }
+        .onChange(of: desiredContentSize) { _, newSize in
+            onSizeChange(newSize)
+        }
     }
 
     private var mixerContent: some View {
@@ -254,15 +257,16 @@ struct MixerView: View {
         min(MixerPanelMetrics.maximumAppListHeight, MixerPanelMetrics.appListHeight(for: expandedApps.count))
     }
 
-    private func toggleExpansion() {
-        let nextIsExpanded = expansionState.toggle()
-        onSizeChange(
-            MixerPanelMetrics.contentSize(
-                isExpanded: nextIsExpanded,
-                visibleAppCount: nextIsExpanded ? expandedApps.count : collapsedApps.count,
-                canExpand: canExpand
-            )
+    private var desiredContentSize: CGSize {
+        MixerPanelMetrics.contentSize(
+            isExpanded: expansionState.isExpanded,
+            visibleAppCount: expansionState.isExpanded ? expandedApps.count : collapsedApps.count,
+            canExpand: canExpand
         )
+    }
+
+    private func toggleExpansion() {
+        _ = expansionState.toggle()
     }
 
     @ViewBuilder

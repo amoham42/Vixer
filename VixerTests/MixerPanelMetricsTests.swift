@@ -39,6 +39,23 @@ struct MixerPanelMetricsTests {
         #expect(state.isExpanded == false)
     }
 
+    @Test
+    func expandedContentSizeChangesWithVisibleAppCount() {
+        let oneApp = MixerPanelMetrics.contentSize(isExpanded: true, visibleAppCount: 1, canExpand: true)
+        let fourApps = MixerPanelMetrics.contentSize(isExpanded: true, visibleAppCount: 4, canExpand: true)
+
+        #expect(fourApps.height > oneApp.height)
+        #expect(fourApps.width == oneApp.width)
+    }
+
+    @Test
+    func collapsedContentSizeIgnoresVisibleAppCount() {
+        let oneApp = MixerPanelMetrics.contentSize(isExpanded: false, visibleAppCount: 1, canExpand: true)
+        let manyApps = MixerPanelMetrics.contentSize(isExpanded: false, visibleAppCount: 20, canExpand: true)
+
+        #expect(oneApp == manyApps)
+    }
+
     @Test func expandedSizeTightensHeightToVisibleAppCountWhenListDoesNotNeedScrolling() {
         let twoApps = MixerPanelMetrics.contentSize(isExpanded: true, visibleAppCount: 2, canExpand: true)
         let eightApps = MixerPanelMetrics.contentSize(isExpanded: true, visibleAppCount: 8, canExpand: true)
