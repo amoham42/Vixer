@@ -13,6 +13,7 @@ final class AudioTapController {
     private var aggregateID: AudioObjectID = kAudioObjectUnknown
     private var ioProcID: AudioDeviceIOProcID?
     private var defaultDeviceListenerInstalled = false
+    private var defaultDeviceBlock: AudioObjectPropertyListenerBlock?
     private var defaultDeviceAddress = AudioObjectPropertyAddress(
         mSelector: kAudioHardwarePropertyDefaultOutputDevice,
         mScope: kAudioObjectPropertyScopeGlobal,
@@ -117,6 +118,7 @@ final class AudioTapController {
         let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
             DispatchQueue.main.async { self?.handleDefaultOutputChanged() }
         }
+        self.defaultDeviceBlock = block
         let status = AudioObjectAddPropertyListenerBlock(
             AudioObjectID(kAudioObjectSystemObject),
             &defaultDeviceAddress, .main, block
@@ -137,12 +139,13 @@ final class AudioTapController {
     }
 
     func teardown() {
-        if defaultDeviceListenerInstalled {
+        if defaultDeviceListenerInstalled, let block = defaultDeviceBlock {
             AudioObjectRemovePropertyListenerBlock(
                 AudioObjectID(kAudioObjectSystemObject),
-                &defaultDeviceAddress, .main, { _, _ in }
+                &defaultDeviceAddress, .main, block
             )
             defaultDeviceListenerInstalled = false
+            defaultDeviceBlock = nil
         }
         stopIO()
         AggregateDeviceBuilder.destroy(aggregateID)

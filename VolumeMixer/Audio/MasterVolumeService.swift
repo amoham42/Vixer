@@ -10,7 +10,7 @@ final class MasterVolumeService {
     private(set) var volume: Float = 1.0
     private(set) var muted: Bool = false
 
-    private var listenerBlocks: [(AudioObjectID, AudioObjectPropertyAddress)] = []
+    private var listenerBlocks: [(AudioObjectID, AudioObjectPropertyAddress, AudioObjectPropertyListenerBlock)] = []
     private var currentDeviceID: AudioObjectID = kAudioObjectUnknown
 
     init() {
@@ -132,24 +132,27 @@ final class MasterVolumeService {
         }
         let status = AudioObjectAddPropertyListenerBlock(objectID, &addr, .main, block)
         if status == noErr {
-            listenerBlocks.append((objectID, addr))
+            listenerBlocks.append((objectID, addr, block))
         } else {
             Self.log.error("addPropertyListener failed status=\(status)")
         }
     }
 
     private func teardownListeners() {
-        for (id, addr) in listenerBlocks {
+        for (id, addr, block) in listenerBlocks {
             var a = addr
-            AudioObjectRemovePropertyListenerBlock(id, &a, .main) { _, _ in }
+            AudioObjectRemovePropertyListenerBlock(id, &a, .main, block)
         }
         listenerBlocks.removeAll()
     }
 
     private func teardownPerDeviceListeners() {
-        listenerBlocks.removeAll { entry in
-            entry.0 == currentDeviceID
+        let toRemove = listenerBlocks.filter { $0.0 == currentDeviceID }
+        for (id, addr, block) in toRemove {
+            var a = addr
+            AudioObjectRemovePropertyListenerBlock(id, &a, .main, block)
         }
+        listenerBlocks.removeAll { $0.0 == currentDeviceID }
     }
 
     static func defaultOutputDeviceID() -> AudioObjectID {
