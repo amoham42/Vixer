@@ -1,5 +1,3 @@
-import Foundation
-
 struct AppVolumeState: Codable, Equatable {
     let volume: Float
     let muted: Bool

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PermissionGateView: View {
-    var onDismiss: () -> Void = {}
+    var onDismiss: () -> Void
 
     var body: some View {
         VStack(spacing: 12) {

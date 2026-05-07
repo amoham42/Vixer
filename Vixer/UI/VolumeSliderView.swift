@@ -10,6 +10,7 @@ struct SliderValueMapper {
 struct SliderGeometry {
     static func thumbCenterX(for value: Float, width: CGFloat, thumbSize: CGFloat) -> CGFloat {
         guard width > 0, thumbSize > 0 else { return 0 }
+        guard width > thumbSize else { return width / 2 }
         let clampedValue = CGFloat(UnitInterval.clamp(value))
         return max(thumbSize / 2, min(width - thumbSize / 2, clampedValue * width))
     }

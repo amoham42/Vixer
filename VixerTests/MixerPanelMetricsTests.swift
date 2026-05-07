@@ -32,7 +32,7 @@ struct MixerPanelMetricsTests {
 
     @Test func expansionStateResetsToCollapsedWhenPanelReopens() {
         var state = MixerExpansionState()
-        _ = state.toggle()
+        state.toggle()
 
         state.reset()
 
@@ -79,7 +79,7 @@ struct MixerPanelMetricsTests {
         #expect(MixerTypography.titleFontSize < 24)
         #expect(MixerTypography.sectionLabelFontSize <= MixerTypography.titleFontSize)
         #expect(MixerTypography.sectionLabelWeight == .semibold)
-        #expect(MixerTypography.usesControlCenterRoundedFont)
+        #expect(MixerTypography.fontDesign == .rounded)
     }
 
     @Test func sectionSpacingUsesEqualUpperPaddingForMasterAndAppsLabels() {
