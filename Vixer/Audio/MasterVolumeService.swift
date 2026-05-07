@@ -6,7 +6,7 @@ import OSLog
 @MainActor
 @Observable
 final class MasterVolumeService {
-    private static let log = Logger(subsystem: "app.vixer.Vixer", category: "MasterVolume")
+    private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Vixer", category: "MasterVolume")
 
     private(set) var volume: Float = 1.0
     private(set) var muted: Bool = false

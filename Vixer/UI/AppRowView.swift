@@ -4,7 +4,7 @@ struct AppRowView: View {
     let entry: AppEntry
     @Binding var volume: Float
     @Binding var muted: Bool
-    var isMixerEnabled = true
+    var isMixerEnabled: Bool
 
     var body: some View {
         HStack(spacing: 8) {

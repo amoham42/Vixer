@@ -12,7 +12,7 @@ struct VixerIconTests {
     }
 
     @Test func appBundleDeclaresAssetCatalogAppIcon() {
-        #expect(VixerIcon.bundleIconName(in: .main) == "AppIcon")
+        #expect(Bundle.main.object(forInfoDictionaryKey: "CFBundleIconName") as? String == "AppIcon")
     }
 
     @Test func showMoreIconLoadsAsTemplateSVGAsset() {

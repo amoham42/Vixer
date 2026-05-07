@@ -24,6 +24,10 @@ struct VolumeSliderViewTests {
         #expect(abs(SliderGeometry.thumbCenterX(for: 1.5, width: 100, thumbSize: 20) - 90) <= 0.0001)
     }
 
+    @Test func thumbCenterXStaysInsideVeryNarrowTrack() {
+        #expect(abs(SliderGeometry.thumbCenterX(for: 0.5, width: 10, thumbSize: 20) - 5) <= 0.0001)
+    }
+
     @Test func fillWidthExtendsToTrailingEdgeOfThumbAtMidpoint() {
         #expect(abs(SliderGeometry.fillWidth(for: 0.5, width: 100, thumbSize: 20) - 60) <= 0.0001)
     }

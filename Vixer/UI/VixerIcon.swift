@@ -37,8 +37,4 @@ enum VixerIcon {
         }
         return image
     }
-
-    static func bundleIconName(in bundle: Bundle) -> String? {
-        bundle.object(forInfoDictionaryKey: "CFBundleIconName") as? String
-    }
 }

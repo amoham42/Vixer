@@ -147,7 +147,7 @@ final class AudioTapRenderState: @unchecked Sendable {
         self.bundleID = bundleID
         self.makeupGain = makeupGain
         self.renderer = renderer
-        self.log = Logger(subsystem: "app.vixer.Vixer", category: "AudioTap")
+        self.log = Logger(subsystem: "com.armanmohammadi.Vixer", category: "AudioTap")
     }
 
     func startRenderer() throws {

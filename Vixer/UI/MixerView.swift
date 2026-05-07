@@ -4,9 +4,8 @@ import SwiftUI
 struct MixerExpansionState {
     private(set) var isExpanded = false
 
-    mutating func toggle() -> Bool {
+    mutating func toggle() {
         isExpanded.toggle()
-        return isExpanded
     }
 
     mutating func reset() {
@@ -29,7 +28,6 @@ struct MixerTypography {
     static let titleFontWeight: Font.Weight = .semibold
     static let sectionLabelFontSize: CGFloat = 12
     static let sectionLabelWeight: Font.Weight = .semibold
-    static let usesControlCenterRoundedFont = true
     static let fontDesign: Font.Design = .rounded
 }
 
@@ -266,7 +264,7 @@ struct MixerView: View {
     }
 
     private func toggleExpansion() {
-        _ = expansionState.toggle()
+        expansionState.toggle()
     }
 
     @ViewBuilder
