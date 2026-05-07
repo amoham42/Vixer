@@ -3,6 +3,19 @@ import CoreAudio
 import Observation
 import OSLog
 
+struct AudioOutputProcessSnapshot: Sendable {
+    let pids: Set<pid_t>
+    let bundleIDs: Set<String>
+
+    static let empty = AudioOutputProcessSnapshot(pids: [], bundleIDs: [])
+}
+
+private enum AudioTapTuning {
+    static let defaultStream = 0
+    static let defaultMakeupGain: Float = 1
+    static let faceTimeCallMakeupGain: Float = 100
+}
+
 @MainActor
 @Observable
 final class AppDiscoveryService {
@@ -32,8 +45,11 @@ final class AppDiscoveryService {
     }
 
     func refresh() {
+        refresh(runningOutput: Self.runningAudioOutputProcesses())
+    }
+
+    private func refresh(runningOutput: AudioOutputProcessSnapshot) {
         let previousRunningBundleIDs = runningBundleIDs
-        let runningOutput = Self.runningAudioOutputProcesses()
         let runningRegular = NSWorkspace.shared.runningApplications
             .filter { $0.activationPolicy == .regular }
         let entries = runningRegular.compactMap { app -> AppEntry? in
@@ -132,7 +148,12 @@ final class AppDiscoveryService {
                 } catch {
                     return
                 }
-                self?.refresh()
+                let runningOutput = await Task.detached(priority: .utility) {
+                    Self.runningAudioOutputProcesses()
+                }.value
+                await MainActor.run {
+                    self?.refresh(runningOutput: runningOutput)
+                }
             }
         }
     }
@@ -150,11 +171,17 @@ final class AppDiscoveryService {
     nonisolated private static let audioOwnershipOverrides: [String: AudioOwnershipOverride] = [
         "com.apple.FaceTime": AudioOwnershipOverride(
             ownerBundlePrefix: "com.apple.avconferenced",
-            tapMode: .deviceStream(stream: 0, makeupGain: 100)
+            tapMode: .deviceStream(
+                stream: AudioTapTuning.defaultStream,
+                makeupGain: AudioTapTuning.faceTimeCallMakeupGain
+            )
         ),
         "com.google.Chrome": AudioOwnershipOverride(
             ownerBundlePrefix: "com.google.Chrome",
-            tapMode: .deviceStream(stream: 0, makeupGain: 1)
+            tapMode: .deviceStream(
+                stream: AudioTapTuning.defaultStream,
+                makeupGain: AudioTapTuning.defaultMakeupGain
+            )
         )
     ]
 
@@ -163,7 +190,10 @@ final class AppDiscoveryService {
     }
 
     nonisolated static func audioTapMode(for bundleID: String) -> AudioTapController.TapMode {
-        audioOwnershipOverrides[bundleID]?.tapMode ?? .deviceStream(stream: 0, makeupGain: 1)
+        audioOwnershipOverrides[bundleID]?.tapMode ?? .deviceStream(
+            stream: AudioTapTuning.defaultStream,
+            makeupGain: AudioTapTuning.defaultMakeupGain
+        )
     }
 
     /// Resolves a user-facing bundle ID (e.g. "com.google.Chrome") to the PID of the
@@ -194,8 +224,8 @@ final class AppDiscoveryService {
     /// Returns only CoreAudio process objects that are really producing output now
     /// (`kAudioProcessPropertyIsRunningOutput == 1`). A process object can exist for
     /// an app/helper even while it is silent; those should not create mixer rows.
-    nonisolated private static func runningAudioOutputProcesses() -> (pids: Set<pid_t>, bundleIDs: Set<String>) {
-        guard let processIDs = audioProcessObjectIDs(logFailures: true) else { return ([], []) }
+    nonisolated private static func runningAudioOutputProcesses() -> AudioOutputProcessSnapshot {
+        guard let processIDs = audioProcessObjectIDs(logFailures: true) else { return .empty }
 
         var pids = Set<pid_t>()
         var bundleIDs = Set<String>()
@@ -207,7 +237,7 @@ final class AppDiscoveryService {
                 bundleIDs.insert(bundleID)
             }
         }
-        return (pids, bundleIDs)
+        return AudioOutputProcessSnapshot(pids: pids, bundleIDs: bundleIDs)
     }
 
     nonisolated private static func audioProcessObjectIDs(logFailures: Bool = false) -> [AudioObjectID]? {
