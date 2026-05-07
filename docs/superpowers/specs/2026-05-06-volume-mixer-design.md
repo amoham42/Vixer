@@ -147,7 +147,11 @@ NSWorkspace ──notification──► AppDiscoveryService ──@Observable─
 - Master slider changes → reflected in macOS Sound prefs and vice versa.
 - Deny audio capture permission on first launch → empty state with Settings button.
 
-## 9. Out of Scope
+## 9. Dependencies
+
+Zero third-party dependencies. Apple frameworks only: SwiftUI, AppKit, CoreAudio, AudioToolbox, OSLog. Process Tap setup follows the patterns demonstrated in [insidegui/AudioCap](https://github.com/insidegui/AudioCap) (BSD-2) — read for reference, do not vendor.
+
+## 10. Out of Scope
 
 - Input / mic device control.
 - Per-output-device routing.
@@ -156,7 +160,7 @@ NSWorkspace ──notification──► AppDiscoveryService ──@Observable─
 - iOS / iPadOS support.
 - Backwards compatibility below macOS 14.2.
 
-## 10. File Layout
+## 11. File Layout
 
 ```
 volume-mixer/
@@ -186,7 +190,7 @@ volume-mixer/
     └── superpowers/specs/2026-05-06-volume-mixer-design.md
 ```
 
-## 11. Known Limitations
+## 12. Known Limitations
 
 - macOS 14.2 minimum.
 - DRM-protected audio streams cannot be tapped — sliders for those apps have no effect.
