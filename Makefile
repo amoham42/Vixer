@@ -1,4 +1,5 @@
-APP = build/Build/Products/Debug/Volume\ Mixer.app
+APP = build/Build/Products/Debug/Vixer.app
+DESTINATION = platform=macOS,arch=arm64
 
 .PHONY: gen build run clean test
 
@@ -6,13 +7,13 @@ gen:
 	xcodegen generate
 
 build: gen
-	xcodebuild -project VolumeMixer.xcodeproj -scheme VolumeMixer -configuration Debug -derivedDataPath build build
+	xcodebuild -project Vixer.xcodeproj -scheme Vixer -configuration Debug -derivedDataPath build -destination '$(DESTINATION)' build
 
 test: gen
-	xcodebuild test -project VolumeMixer.xcodeproj -scheme VolumeMixer -destination 'platform=macOS'
+	xcodebuild test -project Vixer.xcodeproj -scheme Vixer -destination '$(DESTINATION)'
 
 run: build
 	open $(APP)
 
 clean:
-	rm -rf build VolumeMixer.xcodeproj
+	rm -rf build Vixer.xcodeproj

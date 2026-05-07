@@ -6,5 +6,5 @@ build/
 .build/
 *.xcworkspace
 !default.xcworkspace
-VolumeMixer/Info.plist
-VolumeMixer/VolumeMixer.entitlements
+Vixer/Info.plist
+Vixer/Vixer.entitlements

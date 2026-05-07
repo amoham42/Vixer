@@ -1,4 +1,4 @@
-# Volume Mixer
+# Vixer
 
 A minimal macOS menu-bar volume mixer with per-app sliders, mute toggles, and a master row. macOS 14.2+, zero third-party dependencies.
 
