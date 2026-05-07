@@ -3,7 +3,7 @@ import Foundation
 import OSLog
 
 final class TapOutputRenderer {
-    private static let log = Logger(subsystem: "com.armanmohammadi.Vixer", category: "TapRenderer")
+    private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Vixer", category: "TapRenderer")
 
     private let ringBuffer: FloatRingBuffer
     private let channelCount: Int
