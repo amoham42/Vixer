@@ -1,8 +1,9 @@
-import XCTest
+import Darwin
+import Testing
 @testable import Vixer
 
-final class AudioSampleProcessorTests: XCTestCase {
-    func test_externalRendererSample_appliesFaceTimeMakeupGainOf100ToLowLevelCallAudio() {
+struct AudioSampleProcessorTests {
+    @Test func externalRendererSampleAppliesFaceTimeMakeupGainOf100ToLowLevelCallAudio() {
         let output = AudioSampleProcessor.externalRendererSample(
             input: 0.001,
             volume: 0.5,
@@ -10,10 +11,10 @@ final class AudioSampleProcessorTests: XCTestCase {
             makeupGain: 100
         )
 
-        XCTAssertEqual(output, tanh(0.05), accuracy: 0.000001)
+        #expect(abs(output - tanh(0.05)) <= 0.000001)
     }
 
-    func test_externalRendererSample_canUseUnityMakeupGainForRegularApps() {
+    @Test func externalRendererSampleCanUseUnityMakeupGainForRegularApps() {
         let output = AudioSampleProcessor.externalRendererSample(
             input: 0.5,
             volume: 0.5,
@@ -21,10 +22,10 @@ final class AudioSampleProcessorTests: XCTestCase {
             makeupGain: 1
         )
 
-        XCTAssertEqual(output, tanh(0.25), accuracy: 0.000001)
+        #expect(abs(output - tanh(0.25)) <= 0.000001)
     }
 
-    func test_externalRendererSample_limitsLargeSamples() {
+    @Test func externalRendererSampleLimitsLargeSamples() {
         let output = AudioSampleProcessor.externalRendererSample(
             input: 1.0,
             volume: 1.0,
@@ -32,10 +33,10 @@ final class AudioSampleProcessorTests: XCTestCase {
             makeupGain: 100
         )
 
-        XCTAssertLessThanOrEqual(output, 1.0)
+        #expect(output <= 1.0)
     }
 
-    func test_externalRendererSample_returnsZeroWhenMuted() {
+    @Test func externalRendererSampleReturnsZeroWhenMuted() {
         let output = AudioSampleProcessor.externalRendererSample(
             input: 0.5,
             volume: 1.0,
@@ -43,6 +44,6 @@ final class AudioSampleProcessorTests: XCTestCase {
             makeupGain: 100
         )
 
-        XCTAssertEqual(output, 0)
+        #expect(output == 0)
     }
 }

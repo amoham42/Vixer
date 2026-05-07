@@ -21,6 +21,7 @@ final class MixerStatusPanel: NSPanel {
     override var canBecomeKey: Bool { true }
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var statusPanel: MixerStatusPanel?
@@ -113,9 +114,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func installOutsideClickMonitor() {
         if outsideClickMonitor != nil { return }
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-            guard let self, let panel = self.statusPanel, panel.isVisible else { return }
-            if !panel.frame.contains(event.locationInWindow) {
-                self.closeStatusPanel()
+            Task { @MainActor in
+                guard let self, let panel = self.statusPanel, panel.isVisible else { return }
+                if !panel.frame.contains(event.locationInWindow) {
+                    self.closeStatusPanel()
+                }
             }
         }
     }

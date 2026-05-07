@@ -1,3 +1,4 @@
+import Observation
 import SwiftUI
 
 struct MixerExpansionState {
@@ -13,8 +14,10 @@ struct MixerExpansionState {
     }
 }
 
-final class MixerPresentationState: ObservableObject {
-    @Published var resetToken = UUID()
+@MainActor
+@Observable
+final class MixerPresentationState {
+    var resetToken = UUID()
 
     func resetForNewPresentation() {
         resetToken = UUID()
@@ -93,8 +96,16 @@ struct MixerView: View {
     @State private var master = MasterVolumeService()
     @State private var expansionState = MixerExpansionState()
 
-    @ObservedObject var presentationState = MixerPresentationState()
-    var onSizeChange: (CGSize) -> Void = { _ in }
+    let presentationState: MixerPresentationState
+    var onSizeChange: (CGSize) -> Void
+
+    init(
+        presentationState: MixerPresentationState = MixerPresentationState(),
+        onSizeChange: @escaping (CGSize) -> Void = { _ in }
+    ) {
+        self.presentationState = presentationState
+        self.onSizeChange = onSizeChange
+    }
 
     var body: some View {
         Group {

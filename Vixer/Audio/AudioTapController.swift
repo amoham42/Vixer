@@ -3,7 +3,7 @@ import Foundation
 import OSLog
 
 final class AudioTapController {
-    enum TapMode: Equatable {
+    enum TapMode: Equatable, Sendable {
         case deviceStream(stream: Int, makeupGain: Float)
     }
 
@@ -22,8 +22,7 @@ final class AudioTapController {
     private var defaultDeviceBlock: AudioObjectPropertyListenerBlock?
     private var defaultDeviceAddress = AudioObjectPropertyAddress.global(kAudioHardwarePropertyDefaultOutputDevice)
 
-    var volume: Float = 1.0
-    var muted: Bool = false
+    private let controlState = AudioTapControlState()
     private var ioProcLogged = false
     private var peakProbeRemaining = 100
 
@@ -67,8 +66,8 @@ final class AudioTapController {
 
     deinit { teardown() }
 
-    func setVolume(_ value: Float) { volume = UnitInterval.clamp(value) }
-    func setMuted(_ value: Bool) { muted = value }
+    func setVolume(_ value: Float) { controlState.setVolume(value) }
+    func setMuted(_ value: Bool) { controlState.setMuted(value) }
 
     // MARK: - tap creation
 
@@ -147,7 +146,8 @@ final class AudioTapController {
             nil
         ) { [weak self] _, inInputData, _, outOutputData, _ in
             guard let self = self else { return }
-            let gain: Float = self.muted ? 0.0 : self.volume
+            let control = self.controlState.snapshot()
+            let gain: Float = control.muted ? 0.0 : control.volume
             let inABL  = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: inInputData))
             let outABL = UnsafeMutableAudioBufferListPointer(outOutputData)
             let n = min(inABL.count, outABL.count)
@@ -167,8 +167,8 @@ final class AudioTapController {
                     }
                     outP[f] = AudioSampleProcessor.externalRendererSample(
                         input: sample,
-                        volume: self.volume,
-                        muted: self.muted,
+                        volume: control.volume,
+                        muted: control.muted,
                         makeupGain: self.externalRendererMakeupGain
                     )
                 }
@@ -221,7 +221,7 @@ final class AudioTapController {
 
     private func installDefaultDeviceListener() {
         let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
-            DispatchQueue.main.async { self?.handleDefaultOutputChanged() }
+            self?.handleDefaultOutputChanged()
         }
         self.defaultDeviceBlock = block
         let status = AudioObjectAddPropertyListenerBlock(

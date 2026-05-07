@@ -1,8 +1,9 @@
-import XCTest
+import Testing
 @testable import Vixer
 
-final class AppDiscoveryServiceTests: XCTestCase {
-    func test_visibleEntries_keepsOpenInactiveAppsForExpandedList() {
+@MainActor
+struct AppDiscoveryServiceTests {
+    @Test func visibleEntriesKeepsOpenInactiveAppsForExpandedList() {
         let entries = [
             AppEntry(pid: 10, bundleID: "com.test.Silent", name: "Silent", isAudioActive: false),
             AppEntry(pid: 20, bundleID: "com.test.Playing", name: "Playing", isAudioActive: true)
@@ -10,24 +11,26 @@ final class AppDiscoveryServiceTests: XCTestCase {
 
         let visible = AppDiscoveryService.visibleEntries(entries, ownBundleID: nil)
 
-        XCTAssertEqual(visible.map(\.bundleID), ["com.test.Silent", "com.test.Playing"])
+        #expect(visible.map(\.bundleID) == ["com.test.Silent", "com.test.Playing"])
     }
 
-    func test_apps_areSortedByAudioActivityThenLocalizedName() {
+    @Test func appsAreSortedByAudioActivityThenLocalizedName() {
         let service = AppDiscoveryService()
         service.refresh()
 
-        let firstInactiveIndex = service.apps.firstIndex { !$0.isAudioActive } ?? service.apps.endIndex
-        XCTAssertTrue(service.apps[..<firstInactiveIndex].allSatisfy(\.isAudioActive))
-        XCTAssertTrue(service.apps[firstInactiveIndex...].allSatisfy { !$0.isAudioActive })
+        let firstInactiveIndex = service.apps.firstIndex { $0.isAudioActive == false } ?? service.apps.endIndex
+        let activeAppsAreAllActive = service.apps[..<firstInactiveIndex].allSatisfy { $0.isAudioActive }
+        let inactiveAppsAreAllInactive = service.apps[firstInactiveIndex...].allSatisfy { $0.isAudioActive == false }
+        #expect(activeAppsAreAllActive)
+        #expect(inactiveAppsAreAllInactive)
 
         let activeNames = service.apps[..<firstInactiveIndex].map(\.name)
         let inactiveNames = service.apps[firstInactiveIndex...].map(\.name)
-        XCTAssertEqual(activeNames, activeNames.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending })
-        XCTAssertEqual(inactiveNames, inactiveNames.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending })
+        #expect(activeNames == activeNames.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending })
+        #expect(inactiveNames == inactiveNames.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending })
     }
 
-    func test_collapsedEntries_mergesDuplicateBundleIDsAndPrefersAudioActiveRepresentative() {
+    @Test func collapsedEntriesMergesDuplicateBundleIDsAndPrefersAudioActiveRepresentative() throws {
         let entries = [
             AppEntry(pid: 10, bundleID: "com.test.App", name: "Test App", isAudioActive: false),
             AppEntry(pid: 20, bundleID: "com.test.App", name: "Test App", isAudioActive: true),
@@ -36,13 +39,13 @@ final class AppDiscoveryServiceTests: XCTestCase {
 
         let collapsed = AppDiscoveryService.collapsedEntries(entries)
 
-        XCTAssertEqual(collapsed.count, 2)
-        let testApp = collapsed.first { $0.bundleID == "com.test.App" }
-        XCTAssertEqual(testApp?.pid, 20)
-        XCTAssertEqual(testApp?.isAudioActive, true)
+        #expect(collapsed.count == 2)
+        let testApp = try #require(collapsed.first { $0.bundleID == "com.test.App" })
+        #expect(testApp.pid == 20)
+        #expect(testApp.isAudioActive == true)
     }
 
-    func test_visibleEntries_excludesVixerItself() {
+    @Test func visibleEntriesExcludesVixerItself() {
         let entries = [
             AppEntry(pid: 10, bundleID: "com.armanmohammadi.Vixer", name: "Vixer", isAudioActive: true),
             AppEntry(pid: 20, bundleID: "com.test.App", name: "Test App", isAudioActive: true)
@@ -50,60 +53,44 @@ final class AppDiscoveryServiceTests: XCTestCase {
 
         let visible = AppDiscoveryService.visibleEntries(entries, ownBundleID: "com.armanmohammadi.Vixer")
 
-        XCTAssertEqual(visible.map(\.bundleID), ["com.test.App"])
+        #expect(visible.map(\.bundleID) == ["com.test.App"])
     }
 
-    func test_audioOwnerBundlePrefix_mapsFaceTimeToAVConferenceD() {
-        XCTAssertEqual(
-            AppDiscoveryService.audioOwnerBundlePrefix(for: "com.apple.FaceTime"),
-            "com.apple.avconferenced"
-        )
+    @Test func audioOwnerBundlePrefixMapsFaceTimeToAVConferenceD() {
+        #expect(AppDiscoveryService.audioOwnerBundlePrefix(for: "com.apple.FaceTime") == "com.apple.avconferenced")
     }
 
-    func test_audioTapMode_usesBoostedDeviceStreamForFaceTime() {
-        XCTAssertEqual(
-            AppDiscoveryService.audioTapMode(for: "com.apple.FaceTime"),
-            .deviceStream(stream: 0, makeupGain: 100)
-        )
+    @Test func audioTapModeUsesBoostedDeviceStreamForFaceTime() {
+        #expect(AppDiscoveryService.audioTapMode(for: "com.apple.FaceTime") == .deviceStream(stream: 0, makeupGain: 100))
     }
 
-    func test_audioTapMode_usesStandardDeviceStreamForChrome() {
-        XCTAssertEqual(
-            AppDiscoveryService.audioTapMode(for: "com.google.Chrome"),
-            .deviceStream(stream: 0, makeupGain: 1)
-        )
+    @Test func audioTapModeUsesStandardDeviceStreamForChrome() {
+        #expect(AppDiscoveryService.audioTapMode(for: "com.google.Chrome") == .deviceStream(stream: 0, makeupGain: 1))
     }
 
-    func test_audioTapMode_usesStandardDeviceStreamForUnconfiguredRegularApps() {
-        XCTAssertEqual(
-            AppDiscoveryService.audioTapMode(for: "com.apple.Safari"),
-            .deviceStream(stream: 0, makeupGain: 1)
-        )
+    @Test func audioTapModeUsesStandardDeviceStreamForUnconfiguredRegularApps() {
+        #expect(AppDiscoveryService.audioTapMode(for: "com.apple.Safari") == .deviceStream(stream: 0, makeupGain: 1))
     }
 
-    func test_isAudioOutputActive_usesOverrideOwnerBundleForFaceTime() {
-        XCTAssertTrue(
-            AppDiscoveryService.isAudioOutputActive(
-                bundleID: "com.apple.FaceTime",
-                pid: 123,
-                runningOutputPIDs: [],
-                runningOutputBundleIDs: ["com.apple.avconferenced"]
-            )
-        )
+    @Test func isAudioOutputActiveUsesOverrideOwnerBundleForFaceTime() {
+        #expect(AppDiscoveryService.isAudioOutputActive(
+            bundleID: "com.apple.FaceTime",
+            pid: 123,
+            runningOutputPIDs: [],
+            runningOutputBundleIDs: ["com.apple.avconferenced"]
+        ))
     }
 
-    func test_isAudioOutputActive_rejectsProcessObjectsThatAreNotRunningOutput() {
-        XCTAssertFalse(
-            AppDiscoveryService.isAudioOutputActive(
-                bundleID: "com.test.App",
-                pid: 123,
-                runningOutputPIDs: [],
-                runningOutputBundleIDs: ["com.other.Audio"]
-            )
-        )
+    @Test func isAudioOutputActiveRejectsProcessObjectsThatAreNotRunningOutput() {
+        #expect(AppDiscoveryService.isAudioOutputActive(
+            bundleID: "com.test.App",
+            pid: 123,
+            runningOutputPIDs: [],
+            runningOutputBundleIDs: ["com.other.Audio"]
+        ) == false)
     }
 
-    func test_terminatedBundleIDs_usesRunningAppsNotAudioVisibility() {
+    @Test func terminatedBundleIDsUsesRunningAppsNotAudioVisibility() {
         let currentEntries = [
             AppEntry(pid: 10, bundleID: "com.test.SilentButStillRunning", name: "Silent", isAudioActive: false)
         ]
@@ -113,6 +100,6 @@ final class AppDiscoveryServiceTests: XCTestCase {
             currentEntries: currentEntries
         )
 
-        XCTAssertEqual(terminated, ["com.test.Quit"])
+        #expect(terminated == ["com.test.Quit"])
     }
 }

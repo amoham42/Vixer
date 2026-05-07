@@ -3,6 +3,7 @@ import Foundation
 import Observation
 import OSLog
 
+@MainActor
 @Observable
 final class MasterVolumeService {
     private static let log = Logger(subsystem: "com.armanmohammadi.Vixer", category: "MasterVolume")
@@ -18,7 +19,7 @@ final class MasterVolumeService {
         addDefaultDeviceListener()
     }
 
-    deinit {
+    isolated deinit {
         teardownListeners()
     }
 
@@ -117,7 +118,7 @@ final class MasterVolumeService {
     ) {
         var addr = address
         let block: AudioObjectPropertyListenerBlock = { _, _ in
-            DispatchQueue.main.async { handler() }
+            Task { @MainActor in handler() }
         }
         let status = AudioObjectAddPropertyListenerBlock(objectID, &addr, .main, block)
         if status == noErr {
@@ -144,7 +145,7 @@ final class MasterVolumeService {
         listenerBlocks.removeAll { $0.0 == currentDeviceID }
     }
 
-    static func defaultOutputDeviceID() -> AudioObjectID {
+    nonisolated static func defaultOutputDeviceID() -> AudioObjectID {
         var address = AudioObjectPropertyAddress.global(kAudioHardwarePropertyDefaultOutputDevice)
         var id = AudioObjectID(kAudioObjectUnknown)
         var size = UInt32(MemoryLayout<AudioObjectID>.size)
@@ -155,7 +156,7 @@ final class MasterVolumeService {
         return id
     }
 
-    static func deviceUID(_ id: AudioObjectID) -> String? {
+    nonisolated static func deviceUID(_ id: AudioObjectID) -> String? {
         var address = AudioObjectPropertyAddress.global(kAudioDevicePropertyDeviceUID)
         var uid: CFString?
         var size = UInt32(MemoryLayout<CFString?>.size)

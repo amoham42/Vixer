@@ -58,7 +58,7 @@ struct VolumeSliderView: View {
                     .allowsHitTesting(false)
 
                 Text(SliderGeometry.percentageText(for: value))
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .font(.caption2.weight(.semibold))
                     .monospacedDigit()
                     .foregroundStyle(.black.opacity(isEnabled ? 0.56 : 0.30))
                     .shadow(color: .white.opacity(isEnabled ? 0.18 : 0.08), radius: 0.5, x: 0, y: 0.5)
@@ -78,7 +78,7 @@ struct VolumeSliderView: View {
         .frame(height: height)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Volume")
-        .accessibilityValue(SliderGeometry.percentageText(for: value).replacingOccurrences(of: "%", with: " percent"))
+        .accessibilityValue(SliderGeometry.percentageText(for: value).replacing("%", with: " percent"))
         .accessibilityAdjustableAction { direction in
             guard isEnabled else { return }
             switch direction {

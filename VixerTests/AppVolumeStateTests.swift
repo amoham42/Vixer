@@ -1,29 +1,30 @@
-import XCTest
+import Foundation
+import Testing
 @testable import Vixer
 
-final class AppVolumeStateTests: XCTestCase {
-    func test_default_isFullVolumeAndUnmuted() {
+struct AppVolumeStateTests {
+    @Test func defaultIsFullVolumeAndUnmuted() {
         let state = AppVolumeState()
-        XCTAssertEqual(state.volume, 1.0)
-        XCTAssertFalse(state.muted)
+        #expect(state.volume == 1.0)
+        #expect(state.muted == false)
     }
 
-    func test_isPassthrough_whenFullVolumeAndUnmuted() {
-        XCTAssertTrue(AppVolumeState(volume: 1.0, muted: false).isPassthrough)
-        XCTAssertFalse(AppVolumeState(volume: 0.5, muted: false).isPassthrough)
-        XCTAssertFalse(AppVolumeState(volume: 1.0, muted: true).isPassthrough)
+    @Test func isPassthroughWhenFullVolumeAndUnmuted() {
+        #expect(AppVolumeState(volume: 1.0, muted: false).isPassthrough)
+        #expect(AppVolumeState(volume: 0.5, muted: false).isPassthrough == false)
+        #expect(AppVolumeState(volume: 1.0, muted: true).isPassthrough == false)
     }
 
-    func test_codable_roundTrip() throws {
+    @Test func codableRoundTrip() throws {
         let original = AppVolumeState(volume: 0.42, muted: true)
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(AppVolumeState.self, from: data)
-        XCTAssertEqual(decoded.volume, 0.42, accuracy: 0.0001)
-        XCTAssertEqual(decoded.muted, true)
+        #expect(abs(decoded.volume - 0.42) <= 0.0001)
+        #expect(decoded.muted == true)
     }
 
-    func test_volume_isClamped() {
-        XCTAssertEqual(AppVolumeState(volume: 2.0, muted: false).volume, 1.0)
-        XCTAssertEqual(AppVolumeState(volume: -0.5, muted: false).volume, 0.0)
+    @Test func volumeIsClamped() {
+        #expect(AppVolumeState(volume: 2.0, muted: false).volume == 1.0)
+        #expect(AppVolumeState(volume: -0.5, muted: false).volume == 0.0)
     }
 }
