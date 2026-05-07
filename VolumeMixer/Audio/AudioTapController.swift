@@ -12,6 +12,12 @@ final class AudioTapController {
     private var tapUID: String = ""
     private var aggregateID: AudioObjectID = kAudioObjectUnknown
     private var ioProcID: AudioDeviceIOProcID?
+    private var defaultDeviceListenerInstalled = false
+    private var defaultDeviceAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+    )
 
     var volume: Float = 1.0
     var muted: Bool = false
@@ -21,6 +27,7 @@ final class AudioTapController {
         self.bundleID = bundleID
         try createTap()
         try buildAggregateAndStart()
+        installDefaultDeviceListener()
     }
 
     deinit { teardown() }
@@ -118,7 +125,37 @@ final class AudioTapController {
         ioProcID = nil
     }
 
+    private func installDefaultDeviceListener() {
+        let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            DispatchQueue.main.async { self?.handleDefaultOutputChanged() }
+        }
+        let status = AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &defaultDeviceAddress, .main, block
+        )
+        if status == noErr { defaultDeviceListenerInstalled = true }
+    }
+
+    private func handleDefaultOutputChanged() {
+        Self.log.debug("Default output changed; rebuilding aggregate for \(self.bundleID, privacy: .public)")
+        stopIO()
+        AggregateDeviceBuilder.destroy(aggregateID)
+        aggregateID = kAudioObjectUnknown
+        do {
+            try buildAggregateAndStart()
+        } catch {
+            Self.log.error("Rebuild failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
     func teardown() {
+        if defaultDeviceListenerInstalled {
+            AudioObjectRemovePropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject),
+                &defaultDeviceAddress, .main, { _, _ in }
+            )
+            defaultDeviceListenerInstalled = false
+        }
         stopIO()
         AggregateDeviceBuilder.destroy(aggregateID)
         aggregateID = kAudioObjectUnknown
