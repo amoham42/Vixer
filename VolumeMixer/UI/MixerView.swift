@@ -6,6 +6,21 @@ struct MixerView: View {
     @State private var master = MasterVolumeService()
 
     var body: some View {
+        Group {
+            if store.permissionDenied {
+                PermissionGateView()
+            } else {
+                mixerContent
+            }
+        }
+        .onAppear {
+            store.pidResolver = { [weak discovery] bundleID in
+                discovery?.apps.first(where: { $0.bundleID == bundleID })?.pid
+            }
+        }
+    }
+
+    private var mixerContent: some View {
         VStack(spacing: 0) {
             MasterRowView(service: master)
                 .padding(.vertical, 8)
@@ -27,11 +42,6 @@ struct MixerView: View {
             .frame(maxHeight: 460)
         }
         .frame(width: 320)
-        .onAppear {
-            store.pidResolver = { [weak discovery] bundleID in
-                discovery?.apps.first(where: { $0.bundleID == bundleID })?.pid
-            }
-        }
     }
 
     private func bindingVolume(for bundleID: String) -> Binding<Float> {

@@ -13,6 +13,14 @@ final class VolumeStore {
     private var controllers: [String: AudioTapController] = [:]
     private var writeTimer: DispatchSourceTimer?
 
+    private(set) var permissionDenied = false
+
+    /// Sets the flag if at least one tap install has failed with a permission-related status.
+    /// Called by syncController.
+    fileprivate func notePermissionFailure() {
+        permissionDenied = true
+    }
+
     /// Resolves the current PID for a bundle ID. The store needs a PID to install a tap;
     /// `MixerView` injects this closure so the store stays free of NSWorkspace dependencies (testable).
     var pidResolver: (String) -> pid_t? = { _ in nil }
@@ -78,6 +86,11 @@ final class VolumeStore {
             controllers[bundleID] = controller
         } catch {
             Self.log.error("Failed to install tap for \(bundleID, privacy: .public): \(String(describing: error), privacy: .public)")
+            // status -50 (kAudio_BadParamError) and -4 (-kAudioHardwareNotRunningError) are seen
+            // when audio capture is not authorized. Treat any failure here as a permission flag —
+            // the worst case is we show the gate even when the real cause is something else,
+            // and the gate has a "Open Privacy Settings" button which is also useful in that case.
+            notePermissionFailure()
         }
     }
 
