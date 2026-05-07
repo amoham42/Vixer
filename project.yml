@@ -1,0 +1,66 @@
+name: VolumeMixer
+options:
+  bundleIdPrefix: com.armanmohammadi
+  deploymentTarget:
+    macOS: "14.2"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MACOSX_DEPLOYMENT_TARGET: "14.2"
+    ENABLE_HARDENED_RUNTIME: YES
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+targets:
+  VolumeMixer:
+    type: application
+    platform: macOS
+    sources:
+      - path: VolumeMixer
+        excludes:
+          - "Info.plist"
+          - "VolumeMixer.entitlements"
+    info:
+      path: VolumeMixer/Info.plist
+      properties:
+        LSUIElement: true
+        LSMinimumSystemVersion: "14.2"
+        CFBundleName: Volume Mixer
+        CFBundleDisplayName: Volume Mixer
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        NSAudioCaptureUsageDescription: "Volume Mixer captures app audio output to apply per-app volume."
+        NSHumanReadableCopyright: ""
+    entitlements:
+      path: VolumeMixer/VolumeMixer.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
+        com.apple.security.device.audio-input: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.armanmohammadi.VolumeMixer
+        GENERATE_INFOPLIST_FILE: NO
+  VolumeMixerTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - VolumeMixerTests
+    dependencies:
+      - target: VolumeMixer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.armanmohammadi.VolumeMixerTests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  VolumeMixer:
+    build:
+      targets:
+        VolumeMixer: all
+        VolumeMixerTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - VolumeMixerTests
