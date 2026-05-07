@@ -36,7 +36,7 @@ This approach was chosen over a virtual-driver approach because it is sandbox-fr
 
 ### 3.3 AudioTapController
 One instance per app currently being attenuated. Owns:
-- A `CATapDescription` configured with `processes = [pid]`, `isPrivate = true`, `muteBehavior = .mutedWhenTapped`, mono/stereo mixdown as appropriate.
+- A `CATapDescription` configured with `processes = [pid]`, `isPrivate = true`, `muteBehavior = .mutedWhenTapped`, stereo mixdown (`CATapDescription(stereoMixdownOfProcesses:)`). All taps are stereo regardless of source channel count.
 - A tap object id from `AudioHardwareCreateProcessTap(description)`.
 - A private aggregate device id from `AudioHardwareCreateAggregateDevice(...)` whose description dictionary sets:
   - `kAudioAggregateDeviceIsPrivateKey: true`
@@ -53,7 +53,7 @@ Teardown order on dispose: stop IOProc → destroy IOProc id → destroy aggrega
 
 ### 3.4 MasterVolumeService
 Thin wrapper around the default output device.
-- `volume` getter/setter via `kAudioDevicePropertyVolumeScalar` (left and right channels, or master channel if available).
+- `volume` getter/setter via `kAudioDevicePropertyVolumeScalar`. Prefers the master channel (channel 0) if the device exposes one; otherwise sets channels 1 and 2 to the same value.
 - `muted` getter/setter via `kAudioDevicePropertyMute`.
 - Property listeners on both so external changes (F11/F12, Sound prefs, Bluetooth headphone volume buttons) update the UI.
 - Property listener on `kAudioHardwarePropertyDefaultOutputDevice` to re-bind when the user switches output device.
@@ -78,7 +78,7 @@ Layout:
 - Header row: master (always present, always first).
 - Divider between master and app list.
 - App list: scrollable when total height exceeds 500 pt.
-- Each app row: `[icon button (24×24)] [name (truncated, mid-truncation)] [horizontal slider] [percent label (right-aligned, 3 char)]`.
+- Each app row: `[icon button (24×24)] [name (truncated, mid-truncation)] [horizontal slider] [percent label (right-aligned, fixed width to fit "100%")]`.
 - Click icon → toggles mute. When muted: icon receives a slash overlay (SF Symbol composition `speaker.slash.fill` rendered atop the app icon at 60% opacity) and slider track dims to 30% opacity.
 - Apps not currently producing audio: name color steps down one tier (`secondaryLabelColor`).
 
@@ -109,10 +109,8 @@ NSWorkspace ──notification──► AppDiscoveryService ──@Observable─
 ## 5. Persistence
 
 - UserDefaults key `appVolumes`: JSON-encoded `[String: AppVolumeState]`.
-- UserDefaults key `masterVolume`: `Float`.
-- UserDefaults key `masterMuted`: `Bool`.
 - Writes debounced 250 ms via a single `DispatchSourceTimer`. Reads happen once at launch.
-- Master volume reflects the current default output device's actual scalar — we do not override it on launch; persistence here is a courtesy for users who want the mixer to nudge it back.
+- Master volume is **not** persisted — the system already owns the master volume scalar, so on launch the UI reads the live value from the default output device. Persistence applies only to per-app `appVolumes`. (Earlier draft mentioned `masterVolume` / `masterMuted` UserDefaults keys; those are removed.)
 
 ## 6. Permissions and Packaging
 
