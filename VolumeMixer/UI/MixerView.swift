@@ -17,6 +17,9 @@ struct MixerView: View {
             store.pidResolver = { [weak discovery] bundleID in
                 discovery?.apps.first(where: { $0.bundleID == bundleID })?.pid
             }
+            discovery.onTerminated = { [weak store] bundleID in
+                store?.processTerminated(bundleID: bundleID)
+            }
         }
     }
 
