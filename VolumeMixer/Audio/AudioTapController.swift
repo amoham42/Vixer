@@ -2,13 +2,6 @@ import CoreAudio
 import Foundation
 import OSLog
 
-/// Owns a private process tap on a target app, plus an aggregate device that re-routes the
-/// tap's audio through the current default output with a per-app gain factor.
-///
-/// Threading: `setVolume` / `setMuted` are called from the main thread. The IOProc reads the
-/// `volume` and `muted` properties from the realtime audio thread. Since both are 32-bit
-/// (Float and Bool) and aligned, single-property reads are atomic on Apple silicon and Intel.
-/// A one-buffer (~5 ms) lag in propagation is imperceptible for volume changes.
 final class AudioTapController {
     private static let log = Logger(subsystem: "com.armanmohammadi.VolumeMixer", category: "AudioTap")
 
@@ -17,6 +10,8 @@ final class AudioTapController {
 
     private var tapID: AudioObjectID = kAudioObjectUnknown
     private var tapUID: String = ""
+    private var aggregateID: AudioObjectID = kAudioObjectUnknown
+    private var ioProcID: AudioDeviceIOProcID?
 
     var volume: Float = 1.0
     var muted: Bool = false
@@ -25,11 +20,10 @@ final class AudioTapController {
         self.pid = pid
         self.bundleID = bundleID
         try createTap()
+        try buildAggregateAndStart()
     }
 
-    deinit {
-        teardown()
-    }
+    deinit { teardown() }
 
     func setVolume(_ value: Float) { volume = max(0.0, min(1.0, value)) }
     func setMuted(_ value: Bool) { muted = value }
@@ -46,15 +40,88 @@ final class AudioTapController {
 
         var newTapID = AudioObjectID(kAudioObjectUnknown)
         let status = AudioHardwareCreateProcessTap(description, &newTapID)
-        guard status == noErr else {
-            throw AudioTapError.tapCreationFailed(status: status)
-        }
+        guard status == noErr else { throw AudioTapError.tapCreationFailed(status: status) }
         tapID = newTapID
         tapUID = description.uuid.uuidString
-        Self.log.debug("Created tap \(self.tapUID, privacy: .public) for pid \(self.pid)")
+    }
+
+    // MARK: - aggregate + IOProc
+
+    private func buildAggregateAndStart() throws {
+        let outputID = MasterVolumeService.defaultOutputDeviceID()
+        guard let outputUID = MasterVolumeService.deviceUID(outputID) else {
+            throw AudioTapError.aggregateDeviceCreationFailed(status: -1)
+        }
+        aggregateID = try AggregateDeviceBuilder.create(
+            tapUID: tapUID,
+            outputDeviceUID: outputUID,
+            name: "VolumeMixer-Agg-\(bundleID)"
+        )
+        try installIOProc()
+        try startIO()
+    }
+
+    private func installIOProc() throws {
+        var procID: AudioDeviceIOProcID?
+        let status = AudioDeviceCreateIOProcIDWithBlock(
+            &procID,
+            aggregateID,
+            DispatchQueue.main // documentation-only; the block runs on the realtime audio thread
+        ) { [weak self] _, inInputData, _, outOutputData, _ in
+            guard let self = self else { return }
+            let gain: Float = self.muted ? 0.0 : self.volume
+            let inputBufferList = inInputData.pointee
+            let outputBufferList = outOutputData.pointee
+            let bufferCount = min(inputBufferList.mNumberBuffers, outputBufferList.mNumberBuffers)
+            withUnsafePointer(to: inputBufferList) { inPtr in
+                withUnsafePointer(to: outputBufferList) { outPtr in
+                    let inBuffers = UnsafeBufferPointer(
+                        start: UnsafeRawPointer(inPtr).assumingMemoryBound(to: AudioBufferList.self).pointee.mBuffersAddr,
+                        count: Int(bufferCount)
+                    )
+                    let outBuffers = UnsafeBufferPointer(
+                        start: UnsafeRawPointer(outPtr).assumingMemoryBound(to: AudioBufferList.self).pointee.mBuffersAddr,
+                        count: Int(bufferCount)
+                    )
+                    for i in 0..<Int(bufferCount) {
+                        let input = inBuffers[i]
+                        let output = outBuffers[i]
+                        guard let inData = input.mData, let outData = output.mData else { continue }
+                        let frames = Int(input.mDataByteSize) / MemoryLayout<Float>.size
+                        let inP = inData.assumingMemoryBound(to: Float.self)
+                        let outP = outData.assumingMemoryBound(to: Float.self)
+                        for f in 0..<frames {
+                            outP[f] = inP[f] * gain
+                        }
+                    }
+                }
+            }
+        }
+        guard status == noErr, procID != nil else {
+            throw AudioTapError.ioProcCreationFailed(status: status)
+        }
+        ioProcID = procID
+    }
+
+    private func startIO() throws {
+        guard let procID = ioProcID else { return }
+        let status = AudioDeviceStart(aggregateID, procID)
+        guard status == noErr else {
+            throw AudioTapError.ioProcCreationFailed(status: status)
+        }
+    }
+
+    private func stopIO() {
+        guard let procID = ioProcID else { return }
+        AudioDeviceStop(aggregateID, procID)
+        AudioDeviceDestroyIOProcID(aggregateID, procID)
+        ioProcID = nil
     }
 
     func teardown() {
+        stopIO()
+        AggregateDeviceBuilder.destroy(aggregateID)
+        aggregateID = kAudioObjectUnknown
         if tapID != kAudioObjectUnknown {
             AudioHardwareDestroyProcessTap(tapID)
             tapID = kAudioObjectUnknown
@@ -92,4 +159,16 @@ enum AudioTapError: Error {
     case tapCreationFailed(status: OSStatus)
     case aggregateDeviceCreationFailed(status: OSStatus)
     case ioProcCreationFailed(status: OSStatus)
+}
+
+// Helper used by the IOProc to get a typed pointer to AudioBufferList.mBuffers (a "flexible array").
+// The system declares it as a 1-element fixed array; we reinterpret as a pointer to the first element.
+private extension AudioBufferList {
+    var mBuffersAddr: UnsafePointer<AudioBuffer> {
+        withUnsafePointer(to: self) { listPtr in
+            UnsafeRawPointer(listPtr)
+                .advanced(by: MemoryLayout<UInt32>.size)
+                .assumingMemoryBound(to: AudioBuffer.self)
+        }
+    }
 }
