@@ -4,6 +4,7 @@ xcuserdata/
 DerivedData/
 build/
 .build/
+.worktrees/
 *.xcworkspace
 !default.xcworkspace
 Vixer/Info.plist
