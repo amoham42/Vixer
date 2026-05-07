@@ -5,7 +5,7 @@ import OSLog
 @MainActor
 @Observable
 final class VolumeStore {
-    private static let log = Logger(subsystem: "app.vixer.Vixer", category: "VolumeStore")
+    private static let log = Logger(subsystem: "com.armanmohammadi.Vixer", category: "VolumeStore")
     private let defaults: UserDefaults
     private let storageKey = "appVolumes"
     private let writeDebounce: TimeInterval = 0.25

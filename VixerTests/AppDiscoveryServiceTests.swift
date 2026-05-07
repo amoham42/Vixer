@@ -47,11 +47,11 @@ struct AppDiscoveryServiceTests {
 
     @Test func visibleEntriesExcludesVixerItself() {
         let entries = [
-            AppEntry(pid: 10, bundleID: "app.vixer.Vixer", name: "Vixer", isAudioActive: true),
+            AppEntry(pid: 10, bundleID: "com.armanmohammadi.Vixer", name: "Vixer", isAudioActive: true),
             AppEntry(pid: 20, bundleID: "com.test.App", name: "Test App", isAudioActive: true)
         ]
 
-        let visible = AppDiscoveryService.visibleEntries(entries, ownBundleID: "app.vixer.Vixer")
+        let visible = AppDiscoveryService.visibleEntries(entries, ownBundleID: "com.armanmohammadi.Vixer")
 
         #expect(visible.map(\.bundleID) == ["com.test.App"])
     }
