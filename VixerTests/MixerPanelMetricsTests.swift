@@ -1,71 +1,72 @@
-import XCTest
+import Testing
 @testable import Vixer
 
-final class MixerPanelMetricsTests: XCTestCase {
-    func test_appList_collapsedShowsOnlyCurrentlyActiveAudioApps() {
+@MainActor
+struct MixerPanelMetricsTests {
+    @Test func appListCollapsedShowsOnlyCurrentlyActiveAudioApps() {
         let entries = [
             AppEntry(pid: 10, bundleID: "com.test.Silent", name: "Silent", isAudioActive: false),
             AppEntry(pid: 20, bundleID: "com.test.Playing", name: "Playing", isAudioActive: true)
         ]
 
-        XCTAssertEqual(MixerAppList.collapsedApps(from: entries).map(\.bundleID), ["com.test.Playing"])
+        #expect(MixerAppList.collapsedApps(from: entries).map(\.bundleID) == ["com.test.Playing"])
     }
 
-    func test_appList_expandedShowsOpenAppsIncludingInactiveAudioCandidates() {
+    @Test func appListExpandedShowsOpenAppsIncludingInactiveAudioCandidates() {
         let entries = [
             AppEntry(pid: 10, bundleID: "com.test.Silent", name: "Silent", isAudioActive: false),
             AppEntry(pid: 20, bundleID: "com.test.Playing", name: "Playing", isAudioActive: true)
         ]
 
-        XCTAssertEqual(MixerAppList.expandedApps(from: entries).map(\.bundleID), ["com.test.Silent", "com.test.Playing"])
+        #expect(MixerAppList.expandedApps(from: entries).map(\.bundleID) == ["com.test.Silent", "com.test.Playing"])
     }
 
-    func test_appList_canExpandWhenThereAreOpenAppsBeyondActiveCollapsedRows() {
+    @Test func appListCanExpandWhenThereAreOpenAppsBeyondActiveCollapsedRows() {
         let entries = [
             AppEntry(pid: 10, bundleID: "com.test.Silent", name: "Silent", isAudioActive: false),
             AppEntry(pid: 20, bundleID: "com.test.Playing", name: "Playing", isAudioActive: true)
         ]
 
-        XCTAssertTrue(MixerAppList.canExpand(entries))
+        #expect(MixerAppList.canExpand(entries))
     }
 
-    func test_expansionState_resetsToCollapsedWhenPanelReopens() {
+    @Test func expansionStateResetsToCollapsedWhenPanelReopens() {
         var state = MixerExpansionState()
         _ = state.toggle()
 
         state.reset()
 
-        XCTAssertFalse(state.isExpanded)
+        #expect(state.isExpanded == false)
     }
 
-    func test_expandedSize_tightensHeightToVisibleAppCountWhenListDoesNotNeedScrolling() {
+    @Test func expandedSizeTightensHeightToVisibleAppCountWhenListDoesNotNeedScrolling() {
         let twoApps = MixerPanelMetrics.contentSize(isExpanded: true, visibleAppCount: 2, canExpand: true)
         let eightApps = MixerPanelMetrics.contentSize(isExpanded: true, visibleAppCount: 8, canExpand: true)
 
-        XCTAssertLessThan(twoApps.height, eightApps.height)
-        XCTAssertEqual(eightApps.height, 404, accuracy: 0.0001)
+        #expect(twoApps.height < eightApps.height)
+        #expect(abs(eightApps.height - 404) <= 0.0001)
     }
 
-    func test_expandedSize_capsScrollableListWhenThereAreManyApps() {
+    @Test func expandedSizeCapsScrollableListWhenThereAreManyApps() {
         let manyApps = MixerPanelMetrics.contentSize(isExpanded: true, visibleAppCount: 30, canExpand: true)
 
-        XCTAssertEqual(manyApps.height, 420, accuracy: 0.0001)
-        XCTAssertLessThanOrEqual(manyApps.height, MixerPanelMetrics.maximumExpandedHeight)
+        #expect(abs(manyApps.height - 420) <= 0.0001)
+        #expect(manyApps.height <= MixerPanelMetrics.maximumExpandedHeight)
     }
 
-    func test_collapsedSize_usesCompactDefaultHeight() {
-        XCTAssertEqual(MixerPanelMetrics.contentSize(isExpanded: false, visibleAppCount: 3, canExpand: true).height, 260)
+    @Test func collapsedSizeUsesCompactDefaultHeight() {
+        #expect(MixerPanelMetrics.contentSize(isExpanded: false, visibleAppCount: 3, canExpand: true).height == 260)
     }
 
-    func test_typography_matchesCompactControlCenterSectionStyle() {
-        XCTAssertLessThan(MixerTypography.titleFontSize, 24)
-        XCTAssertLessThanOrEqual(MixerTypography.sectionLabelFontSize, MixerTypography.titleFontSize)
-        XCTAssertEqual(MixerTypography.sectionLabelWeight, .semibold)
-        XCTAssertTrue(MixerTypography.usesControlCenterRoundedFont)
+    @Test func typographyMatchesCompactControlCenterSectionStyle() {
+        #expect(MixerTypography.titleFontSize < 24)
+        #expect(MixerTypography.sectionLabelFontSize <= MixerTypography.titleFontSize)
+        #expect(MixerTypography.sectionLabelWeight == .semibold)
+        #expect(MixerTypography.usesControlCenterRoundedFont)
     }
 
-    func test_sectionSpacing_usesEqualUpperPaddingForMasterAndAppsLabels() {
-        XCTAssertEqual(MixerSpacing.headerToFirstSection, MixerSpacing.sectionDividerToLabel)
-        XCTAssertEqual(MixerSpacing.sectionLabelTopPadding, 2)
+    @Test func sectionSpacingUsesEqualUpperPaddingForMasterAndAppsLabels() {
+        #expect(MixerSpacing.headerToFirstSection == MixerSpacing.sectionDividerToLabel)
+        #expect(MixerSpacing.sectionLabelTopPadding == 2)
     }
 }

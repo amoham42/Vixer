@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import OSLog
 
+@MainActor
 @Observable
 final class VolumeStore {
     private static let log = Logger(subsystem: "com.armanmohammadi.Vixer", category: "VolumeStore")
@@ -12,7 +13,7 @@ final class VolumeStore {
     private var states: [String: AppVolumeState]
     private var controllers: [String: AudioTapController] = [:]
     private var failedBundles: Set<String> = []
-    private var writeTimer: DispatchSourceTimer?
+    private var writeTask: Task<Void, Never>?
 
     private(set) var permissionDenied = false
     private(set) var isEnabled = true
@@ -55,8 +56,8 @@ final class VolumeStore {
         }
     }
 
-    deinit {
-        writeTimer?.cancel()
+    isolated deinit {
+        writeTask?.cancel()
         write()
     }
 
@@ -140,17 +141,21 @@ final class VolumeStore {
     }
 
     private func scheduleWrite() {
-        writeTimer?.cancel()
-        let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
-        timer.schedule(deadline: .now() + writeDebounce)
-        timer.setEventHandler { [weak self] in self?.write() }
-        timer.resume()
-        writeTimer = timer
+        writeTask?.cancel()
+        writeTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await Task.sleep(for: .seconds(self.writeDebounce))
+            } catch {
+                return
+            }
+            self.write()
+        }
     }
 
     func flushPendingWrites() {
-        writeTimer?.cancel()
-        writeTimer = nil
+        writeTask?.cancel()
+        writeTask = nil
         write()
     }
 

@@ -3,13 +3,14 @@ import CoreAudio
 import Observation
 import OSLog
 
+@MainActor
 @Observable
 final class AppDiscoveryService {
-    private static let log = Logger(subsystem: "com.armanmohammadi.Vixer", category: "Discovery")
+    nonisolated private static let log = Logger(subsystem: "com.armanmohammadi.Vixer", category: "Discovery")
 
     private(set) var apps: [AppEntry] = []
     private var observers: [NSObjectProtocol] = []
-    private var pollTimer: DispatchSourceTimer?
+    private var pollTask: Task<Void, Never>?
     private var runningBundleIDs = Set<String>()
     private let pollInterval: TimeInterval = 2.0
 
@@ -23,8 +24,8 @@ final class AppDiscoveryService {
         startAudioActivePolling()
     }
 
-    deinit {
-        pollTimer?.cancel()
+    isolated deinit {
+        pollTask?.cancel()
         for token in observers {
             NSWorkspace.shared.notificationCenter.removeObserver(token)
         }
@@ -60,17 +61,17 @@ final class AppDiscoveryService {
         runningBundleIDs = Set(entries.map(\.bundleID))
     }
 
-    static func visibleEntries(_ entries: [AppEntry], ownBundleID: String?) -> [AppEntry] {
+    nonisolated static func visibleEntries(_ entries: [AppEntry], ownBundleID: String?) -> [AppEntry] {
         collapsedEntries(entries).filter { entry in
             entry.bundleID != ownBundleID
         }
     }
 
-    static func terminatedBundleIDs(previousRunningBundleIDs: Set<String>, currentEntries: [AppEntry]) -> Set<String> {
+    nonisolated static func terminatedBundleIDs(previousRunningBundleIDs: Set<String>, currentEntries: [AppEntry]) -> Set<String> {
         previousRunningBundleIDs.subtracting(Set(currentEntries.map(\.bundleID)))
     }
 
-    static func isAudioOutputActive(
+    nonisolated static func isAudioOutputActive(
         bundleID: String,
         pid: pid_t,
         runningOutputPIDs: Set<pid_t>,
@@ -84,7 +85,7 @@ final class AppDiscoveryService {
         }
     }
 
-    static func collapsedEntries(_ entries: [AppEntry]) -> [AppEntry] {
+    nonisolated static func collapsedEntries(_ entries: [AppEntry]) -> [AppEntry] {
         var collapsed: [String: AppEntry] = [:]
         var order: [String] = []
 
@@ -100,7 +101,7 @@ final class AppDiscoveryService {
         return order.compactMap { collapsed[$0] }
     }
 
-    private static func preferredEntry(_ lhs: AppEntry, over rhs: AppEntry) -> Bool {
+    nonisolated private static func preferredEntry(_ lhs: AppEntry, over rhs: AppEntry) -> Bool {
         if lhs.isAudioActive != rhs.isAudioActive { return lhs.isAudioActive }
         return lhs.name.localizedCaseInsensitiveCompare(rhs.name) != .orderedDescending
     }
@@ -113,7 +114,7 @@ final class AppDiscoveryService {
         ]
         for name in names {
             let token = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                self?.refresh()
+                Task { @MainActor in self?.refresh() }
             }
             observers.append(token)
         }
@@ -122,11 +123,18 @@ final class AppDiscoveryService {
     /// Audio-activeness changes dynamically (apps start/stop streams without launching/quitting),
     /// so workspace notifications aren't enough — we also poll CoreAudio's process list.
     private func startAudioActivePolling() {
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + pollInterval, repeating: pollInterval)
-        timer.setEventHandler { [weak self] in self?.refresh() }
-        timer.resume()
-        pollTimer = timer
+        pollTask?.cancel()
+        let interval = pollInterval
+        pollTask = Task { [weak self] in
+            while Task.isCancelled == false {
+                do {
+                    try await Task.sleep(for: .seconds(interval))
+                } catch {
+                    return
+                }
+                self?.refresh()
+            }
+        }
     }
 
     /// Apps whose audio is owned by a different system process. The slider for the key bundle
@@ -134,12 +142,12 @@ final class AppDiscoveryService {
     ///
     /// Warning: tapping a shared daemon affects every app that routes through it. FaceTime call
     /// audio is owned by avconferenced, which also handles Continuity Calls and other call audio.
-    private struct AudioOwnershipOverride {
+    private struct AudioOwnershipOverride: Sendable {
         let ownerBundlePrefix: String
         let tapMode: AudioTapController.TapMode
     }
 
-    private static let audioOwnershipOverrides: [String: AudioOwnershipOverride] = [
+    nonisolated private static let audioOwnershipOverrides: [String: AudioOwnershipOverride] = [
         "com.apple.FaceTime": AudioOwnershipOverride(
             ownerBundlePrefix: "com.apple.avconferenced",
             tapMode: .deviceStream(stream: 0, makeupGain: 100)
@@ -150,11 +158,11 @@ final class AppDiscoveryService {
         )
     ]
 
-    static func audioOwnerBundlePrefix(for bundleID: String) -> String {
+    nonisolated static func audioOwnerBundlePrefix(for bundleID: String) -> String {
         audioOwnershipOverrides[bundleID]?.ownerBundlePrefix ?? bundleID
     }
 
-    static func audioTapMode(for bundleID: String) -> AudioTapController.TapMode {
+    nonisolated static func audioTapMode(for bundleID: String) -> AudioTapController.TapMode {
         audioOwnershipOverrides[bundleID]?.tapMode ?? .deviceStream(stream: 0, makeupGain: 1)
     }
 
@@ -163,7 +171,7 @@ final class AppDiscoveryService {
     /// the audio is in a `.helper` subprocess, not the main app PID. Prefers a process where
     /// `runningOutput=1`; if none match, falls back to any process whose bundle starts with
     /// the requested prefix; if still none, returns nil.
-    static func audioProducingPID(forBundlePrefix bundleID: String) -> pid_t? {
+    nonisolated static func audioProducingPID(forBundlePrefix bundleID: String) -> pid_t? {
         let searchPrefix = audioOwnerBundlePrefix(for: bundleID)
         guard let processIDs = audioProcessObjectIDs() else { return nil }
 
@@ -186,7 +194,7 @@ final class AppDiscoveryService {
     /// Returns only CoreAudio process objects that are really producing output now
     /// (`kAudioProcessPropertyIsRunningOutput == 1`). A process object can exist for
     /// an app/helper even while it is silent; those should not create mixer rows.
-    private static func runningAudioOutputProcesses() -> (pids: Set<pid_t>, bundleIDs: Set<String>) {
+    nonisolated private static func runningAudioOutputProcesses() -> (pids: Set<pid_t>, bundleIDs: Set<String>) {
         guard let processIDs = audioProcessObjectIDs(logFailures: true) else { return ([], []) }
 
         var pids = Set<pid_t>()
@@ -202,7 +210,7 @@ final class AppDiscoveryService {
         return (pids, bundleIDs)
     }
 
-    private static func audioProcessObjectIDs(logFailures: Bool = false) -> [AudioObjectID]? {
+    nonisolated private static func audioProcessObjectIDs(logFailures: Bool = false) -> [AudioObjectID]? {
         var address = AudioObjectPropertyAddress.global(kAudioHardwarePropertyProcessObjectList)
         var dataSize: UInt32 = 0
         var status = AudioObjectGetPropertyDataSize(
@@ -231,7 +239,7 @@ final class AppDiscoveryService {
         return processIDs
     }
 
-    private static func processPID(for processID: AudioObjectID) -> pid_t? {
+    nonisolated private static func processPID(for processID: AudioObjectID) -> pid_t? {
         var pid: pid_t = 0
         var pidSize = UInt32(MemoryLayout<pid_t>.size)
         var address = AudioObjectPropertyAddress.global(kAudioProcessPropertyPID)
@@ -240,7 +248,7 @@ final class AppDiscoveryService {
         return pid
     }
 
-    private static func processBundleID(for processID: AudioObjectID) -> String? {
+    nonisolated private static func processBundleID(for processID: AudioObjectID) -> String? {
         var bundleCF: CFString?
         var bundleSize = UInt32(MemoryLayout<CFString?>.size)
         var address = AudioObjectPropertyAddress.global(kAudioProcessPropertyBundleID)
@@ -251,7 +259,7 @@ final class AppDiscoveryService {
         return bundleCF as String
     }
 
-    static func processIsRunningOutput(_ processID: AudioObjectID) -> Bool {
+    nonisolated static func processIsRunningOutput(_ processID: AudioObjectID) -> Bool {
         var running: UInt32 = 0
         var runningSize = UInt32(MemoryLayout<UInt32>.size)
         var address = AudioObjectPropertyAddress.global(kAudioProcessPropertyIsRunningOutput)
